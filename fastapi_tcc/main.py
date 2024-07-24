@@ -117,6 +117,10 @@ def register_payment(payment: Payment):
     if payment.purchase_id not in purchases:
         raise HTTPException(status_code=400, detail='Invalid or missing purchase_id')
 
+    existing_payment = any(p.get('purchase_id') == payment.purchase_id for p in payments.values())
+    if existing_payment:
+        raise HTTPException(status_code=400, detail='Payment already exists for this purchase')
+
     payment_id = len(payments) + 1
     payments[payment_id] = payment.dict()
     purchases[payment.purchase_id]['paid'] = True
