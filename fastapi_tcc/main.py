@@ -108,7 +108,7 @@ def get_purchase(purchase_id: int,  x_user_id: int = Header()):
     raise HTTPException(status_code=404, detail='Purchase not found')
 
 
-@app.get("/purchases", response_model=Dict[int, Purchase], tags=['Purchases'])
+@app.get("/all-purchases", response_model=Dict[int, Purchase], tags=['Purchases'])
 def get_all_purchases(x_user_id: int = Header()):
     _ = get_valid_user(x_user_id)
     user_purchases = {pid: p for pid, p in purchases.items() if p.user_id == x_user_id}
@@ -124,7 +124,7 @@ def register_payment(payment: Payment):
     if payment.purchase_id not in purchases:
         raise HTTPException(status_code=400, detail='Invalid or missing purchase_id')
 
-    existing_payment = any(p.get('purchase_id') == payment.purchase_id for p in payments.values())
+    existing_payment = any(p.purchase_id == payment.purchase_id for p in payments.values())
     if existing_payment:
         raise HTTPException(status_code=400, detail='Payment already exists for this purchase')
 
@@ -149,7 +149,7 @@ def get_payment(payment_id: int, x_user_id: int = Header()):
     raise HTTPException(status_code=404, detail='Payment not found')
 
 
-@app.get("/payments", response_model=Dict[int, Payment], tags=['Payments'])
+@app.get("/all-payments", response_model=Dict[int, Payment], tags=['Payments'])
 def get_all_payments(x_user_id: int = Header()):
     _ = get_valid_user(x_user_id)
     user_payments = {pid: p for pid, p in payments.items() if p.user_id == x_user_id}
