@@ -47,6 +47,11 @@ class PaymentResponse(Payment):
 class PaidPurchaseResponse(BaseModel):
     paid_purchases_count: int
 
+
+class TotalPurchasesResponse(BaseModel):
+    total_purchases_count: int
+    
+
 # "Database"
 users: Dict[int, User] = {}
 purchases: Dict[int, Purchase] = {}
@@ -169,3 +174,9 @@ def get_all_users():
 def get_paid_purchases():
     paid_purchases_count = sum(1 for purchase in purchases.values() if purchase.paid)
     return PaidPurchaseResponse(paid_purchases_count=paid_purchases_count)
+
+
+@app.get('/admin/total_purchases', response_model=TotalPurchasesResponse, tags=['Admin'])
+def get_total_purchases():
+    total_purchases_count = len(purchases)
+    return TotalPurchasesResponse(total_purchases_count=total_purchases_count)
