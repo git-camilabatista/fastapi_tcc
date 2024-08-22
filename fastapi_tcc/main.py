@@ -1,9 +1,10 @@
 from fastapi import FastAPI, HTTPException, Header
 from pydantic import BaseModel
-from typing import Dict, Any, List
+from typing import Dict
 
 
 app = FastAPI()
+
 
 # Models
 class UserBase(BaseModel):
@@ -37,7 +38,7 @@ class PurchaseResponse(Purchase):
 class Payment(BaseModel):
     user_id: int
     purchase_id: int
-    
+
 
 class PaymentResponse(Payment):
     payment_id: int
@@ -46,11 +47,12 @@ class PaymentResponse(Payment):
 
 class PaidPurchaseResponse(BaseModel):
     paid_purchases_count: int
+    paid_purchases_total: float
 
 
 class TotalPurchasesResponse(BaseModel):
     total_purchases_count: int
-    
+
 
 # "Database"
 users: Dict[int, User] = {}
@@ -62,22 +64,24 @@ def get_valid_user(user_id):
     user = users.get(user_id)
     if user:
         return user
-    
+
     raise HTTPException(status_code=404, detail='User not found')
 
 
 # Users
 @app.post('/users', response_model=UserResponse, tags=['Users'])
 def register_user(user: User):
-    if any(existing_user.email == user.email for existing_user in users.values()):
-        raise HTTPException(status_code=400, detail="User already registered")
-    
+    if any(
+        existing_user.email == user.email for existing_user in users.values()
+    ):
+        raise HTTPException(status_code=400, detail='User already registered')
+
     user_id = len(users) + 1
     users[user_id] = user
     return UserResponse(
         user_id=user_id,
         email=user.email,
-        message='User registered successfully'
+        message='User registered successfully',
     )
 
 
@@ -90,7 +94,9 @@ def get_user(user_id: int):
 @app.post('/purchases', response_model=PurchaseResponse, tags=['Purchases'])
 def register_purchase(purchase: PurchaseBase):
     if purchase.user_id not in users:
-        raise HTTPException(status_code=400, detail='Invalid or missing user_id')
+        raise HTTPException(
+            status_code=400, detail='Invalid or missing user_id'
+        )
 
     purchase_id = len(purchases) + 1
     purchases[purchase_id] = Purchase.model_validate(purchase.model_dump())
@@ -103,35 +109,46 @@ def register_purchase(purchase: PurchaseBase):
     )
 
 
-@app.get('/purchases/{purchase_id}', response_model=Purchase, tags=['Purchases'])
-def get_purchase(purchase_id: int,  x_user_id: int = Header()):
+@app.get(
+    '/purchases/{purchase_id}', response_model=Purchase, tags=['Purchases']
+)
+def get_purchase(purchase_id: int, x_user_id: int = Header()):
     _ = get_valid_user(x_user_id)
     purchase = purchases.get(purchase_id)
     if purchase and purchase.user_id == x_user_id:
         return purchase
-    
+
     raise HTTPException(status_code=404, detail='Purchase not found')
 
 
-@app.get("/purchases", response_model=Dict[int, Purchase], tags=['Purchases'])
+@app.get('/purchases', response_model=Dict[int, Purchase], tags=['Purchases'])
 def get_all_purchases(x_user_id: int = Header()):
     _ = get_valid_user(x_user_id)
-    user_purchases = {pid: p for pid, p in purchases.items() if p.user_id == x_user_id}
+    user_purchases = {
+        pid: p for pid, p in purchases.items() if p.user_id == x_user_id
+    }
     if user_purchases:
         return user_purchases
 
-    raise HTTPException(status_code=404, detail="No purchases found")
+    raise HTTPException(status_code=404, detail='No purchases found')
 
 
 # Payments
 @app.post('/payments', response_model=PaymentResponse, tags=['Payments'])
 def register_payment(payment: Payment):
     if payment.purchase_id not in purchases:
-        raise HTTPException(status_code=400, detail='Invalid or missing purchase_id')
+        raise HTTPException(
+            status_code=400, detail='Invalid or missing purchase_id'
+        )
 
-    existing_payment = any(p.purchase_id == payment.purchase_id for p in payments.values())
+    payments_copy = payments.copy()
+    existing_payment = any(
+        p.purchase_id == payment.purchase_id for p in payments_copy.values()
+    )
     if existing_payment:
-        raise HTTPException(status_code=400, detail='Payment already exists for this purchase')
+        raise HTTPException(
+            status_code=400, detail='Payment already exists for this purchase'
+        )
 
     payment_id = len(payments) + 1
     payments[payment_id] = payment
@@ -140,7 +157,7 @@ def register_payment(payment: Payment):
         payment_id=payment_id,
         user_id=payment.user_id,
         purchase_id=payment.purchase_id,
-        message='Payment registered successfully'
+        message='Payment registered successfully',
     )
 
 
@@ -150,33 +167,50 @@ def get_payment(payment_id: int, x_user_id: int = Header()):
     payment = payments.get(payment_id)
     if payment and payment.user_id == x_user_id:
         return payment
-    
+
     raise HTTPException(status_code=404, detail='Payment not found')
 
 
-@app.get("/payments", response_model=Dict[int, Payment], tags=['Payments'])
+@app.get('/payments', response_model=Dict[int, Payment], tags=['Payments'])
 def get_all_payments(x_user_id: int = Header()):
     _ = get_valid_user(x_user_id)
-    user_payments = {pid: p for pid, p in payments.items() if p.user_id == x_user_id}
+    user_payments = {
+        pid: p for pid, p in payments.items() if p.user_id == x_user_id
+    }
     if user_payments:
         return user_payments
-    
-    raise HTTPException(status_code=404, detail="No payments found")
+
+    raise HTTPException(status_code=404, detail='No payments found')
 
 
 # Admin
-@app.get("/admin/users", response_model=Dict[int, User], tags=['Admin'])
+@app.get('/admin/users', response_model=Dict[int, User], tags=['Admin'])
 def get_all_users():
     return users
 
 
-@app.get('/admin/paid_purchases', response_model=PaidPurchaseResponse, tags=['Admin'])
+@app.get(
+    '/admin/paid_purchases', response_model=PaidPurchaseResponse, tags=['Admin']
+)
 def get_paid_purchases():
-    paid_purchases_count = sum(1 for purchase in purchases.values() if purchase.paid)
-    return PaidPurchaseResponse(paid_purchases_count=paid_purchases_count)
+    paid_purchases_count = sum(
+        1 for purchase in purchases.values() if purchase.paid
+    )
+    paid_purchases_total = sum(
+        purchase.price for purchase in purchases.values() if purchase.paid
+    )
+    
+    return PaidPurchaseResponse(
+        paid_purchases_count=paid_purchases_count,
+        paid_purchases_total=paid_purchases_total,
+    )
 
 
-@app.get('/admin/total_purchases', response_model=TotalPurchasesResponse, tags=['Admin'])
+@app.get(
+    '/admin/total_purchases',
+    response_model=TotalPurchasesResponse,
+    tags=['Admin'],
+)
 def get_total_purchases():
     total_purchases_count = len(purchases)
     return TotalPurchasesResponse(total_purchases_count=total_purchases_count)
